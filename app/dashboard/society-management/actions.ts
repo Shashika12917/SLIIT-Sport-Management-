@@ -11,6 +11,7 @@ import {
   setTeamCaptain,
   linkTeamToEvent,
   unlinkTeamEvent,
+  updateEventDateTime,
 } from "@/lib/teams";
 import { createClient } from "@/lib/supabase/server";
 
@@ -169,6 +170,7 @@ export async function createTeamEventAndLinkAction(formData: FormData) {
   const teamId = formData.get("teamId") as string;
   const name = formData.get("name") as string;
   const eventDate = formData.get("eventDate") as string;
+  const eventTime = (formData.get("eventTime") as string) || undefined;
   const venue = formData.get("venue") as string;
   const sportType = formData.get("sportType") as string;
 
@@ -176,11 +178,14 @@ export async function createTeamEventAndLinkAction(formData: FormData) {
     throw new Error("Missing required fields");
   }
 
+  // Combine eventDate and eventTime into ISO format
+  const eventDateTime = eventTime ? `${eventDate}T${eventTime}:00` : eventDate;
+
   const { data: event, error } = await supabase
     .from("events")
     .insert({
       name,
-      event_date: eventDate,
+      event_date: eventDateTime,
       venue,
       sport_type: sportType,
       created_by: userId,
@@ -208,6 +213,19 @@ export async function removeTeamScheduleItemAction(formData: FormData) {
   }
 
   await unlinkTeamEvent(linkId);
+  revalidatePath("/dashboard/society-management");
+}
+
+export async function updateEventDateTimeAction(formData: FormData) {
+  const eventId = formData.get("eventId") as string;
+  const eventDate = formData.get("eventDate") as string;
+  const eventTime = (formData.get("eventTime") as string) || undefined;
+
+  if (!eventId || !eventDate) {
+    throw new Error("Missing event id or date");
+  }
+
+  await updateEventDateTime(eventId, eventDate, eventTime);
   revalidatePath("/dashboard/society-management");
 }
 

@@ -1,6 +1,8 @@
 "use client";
 
-import { createTeamEventAndLinkAction, removeTeamScheduleItemAction } from "../actions";
+import { useState } from "react";
+import { createTeamEventAndLinkAction, removeTeamScheduleItemAction, updateEventDateTimeAction } from "../actions";
+import { Calendar, Clock } from "lucide-react";
 import type { TeamScheduleItem } from "@/lib/teams";
 
 type TeamOption = {
@@ -14,6 +16,9 @@ export function SchedulesTab(props: {
   scheduleByTeamId: Record<string, TeamScheduleItem[]>;
 }) {
   const firstTeamId = props.teams[0]?.id ?? "";
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editTime, setEditTime] = useState("");
 
   return (
     <div className="space-y-6">
@@ -57,6 +62,12 @@ export function SchedulesTab(props: {
                 required
               />
               <input
+                type="time"
+                name="eventTime"
+                placeholder="Time"
+                className="h-10 rounded-md border border-base-300 bg-base-100 px-3 text-sm"
+              />
+              <input
                 type="text"
                 name="venue"
                 placeholder="Venue"
@@ -85,10 +96,10 @@ export function SchedulesTab(props: {
                 <tr>
                   <th className="px-4 py-2 font-medium">Team</th>
                   <th className="px-4 py-2 font-medium">Event</th>
-                  <th className="px-4 py-2 font-medium">Date</th>
+                  <th className="px-4 py-2 font-medium">Date & Time</th>
                   <th className="px-4 py-2 font-medium">Venue</th>
                   <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Action</th>
+                  <th className="px-4 py-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,7 +127,65 @@ export function SchedulesTab(props: {
                         {item.event?.name ?? "Unknown"}
                       </td>
                       <td className="px-4 py-2">
-                        {item.event?.event_date ?? "-"}
+                        {editingEventId === item.event?.id ? (
+                          <form
+                            action={updateEventDateTimeAction}
+                            className="flex gap-2 items-center"
+                            onSubmit={() => setEditingEventId(null)}
+                          >
+                            <input
+                              type="hidden"
+                              name="eventId"
+                              value={item.event?.id ?? ""}
+                            />
+                            <input
+                              type="date"
+                              name="eventDate"
+                              value={editDate}
+                              onChange={(e) => setEditDate(e.target.value)}
+                              className="h-8 rounded border border-base-300 px-2 text-sm"
+                              required
+                            />
+                            <input
+                              type="time"
+                              name="eventTime"
+                              value={editTime}
+                              onChange={(e) => setEditTime(e.target.value)}
+                              className="h-8 rounded border border-base-300 px-2 text-sm"
+                            />
+                            <button
+                              type="submit"
+                              className="h-8 rounded bg-success px-2 text-sm font-medium text-success-content hover:bg-success/80"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingEventId(null)}
+                              className="h-8 rounded bg-base-300 px-2 text-sm font-medium hover:bg-base-400"
+                            >
+                              Cancel
+                            </button>
+                          </form>
+                        ) : (
+                          <div className="flex items-center gap-2 text-sm">
+                            {item.event?.event_date && (
+                              <>
+                                <Calendar className="w-4 h-4" />
+                                {new Date(item.event.event_date).toLocaleDateString()}
+                                {item.event.event_date.includes("T") && (
+                                  <>
+                                    <Clock className="w-4 h-4 ml-2" />
+                                    {new Date(item.event.event_date).toLocaleTimeString(
+                                      "default",
+                                      { hour: "2-digit", minute: "2-digit" }
+                                    )}
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-2">
                         {item.event?.venue ?? "-"}
@@ -125,15 +194,30 @@ export function SchedulesTab(props: {
                         {item.event?.status ?? "-"}
                       </td>
                       <td className="px-4 py-2">
-                        <form action={removeTeamScheduleItemAction}>
-                          <input type="hidden" name="linkId" value={item.id} />
+                        <div className="flex gap-2">
                           <button
-                            type="submit"
-                            className="rounded-md border border-error/50 px-3 py-1 text-sm font-medium text-error"
+                            onClick={() => {
+                              if (item.event?.event_date) {
+                                const [datePart, timePart] = item.event.event_date.split("T");
+                                setEditDate(datePart ?? "");
+                                setEditTime(timePart ? timePart.slice(0, 5) : "");
+                                setEditingEventId(item.event.id);
+                              }
+                            }}
+                            className="rounded-md border border-warning/50 px-3 py-1 text-sm font-medium text-warning hover:bg-warning/5"
                           >
-                            Delete
+                            Edit
                           </button>
-                        </form>
+                          <form action={removeTeamScheduleItemAction}>
+                            <input type="hidden" name="linkId" value={item.id} />
+                            <button
+                              type="submit"
+                              className="rounded-md border border-error/50 px-3 py-1 text-sm font-medium text-error hover:bg-error/5"
+                            >
+                              Delete
+                            </button>
+                          </form>
+                        </div>
                       </td>
                     </tr>
                   ));

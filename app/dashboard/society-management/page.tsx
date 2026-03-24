@@ -4,6 +4,7 @@ import { getSocietiesForUser, getTeamsForSociety, getTeamSchedule, type TeamSche
 import { SocietiesSection } from "./_components/societies-section";
 import { TeamsTab } from "./_components/teams-tab";
 import { SchedulesTab } from "./_components/schedules-tab";
+import { CalendarView } from "./_components/calendar-view";
 import { MembersTab } from "./_components/members-tab";
 import { ShieldCheck, Trophy, Users } from "lucide-react";
 
@@ -299,6 +300,10 @@ export default async function SocietyManagementDashboard() {
         <TeamsTab societies={societies} teams={teams} />
         <SchedulesTab
           teams={teams}
+          scheduleByTeamId={scheduleByTeamId}
+        />
+        <CalendarView
+          teams={teams.filter((t) => t.status === "active")}
           scheduleByTeamId={scheduleByTeamId}
         />
         <MembersTab members={members} />
