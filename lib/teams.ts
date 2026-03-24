@@ -304,3 +304,23 @@ export async function getTeamSchedule(teamId: string): Promise<TeamScheduleItem[
   return normalized;
 }
 
+export async function updateEventDateTime(eventId: string, eventDate: string, eventTime?: string) {
+  const supabase = await createClient();
+
+  // Combine date and time if time is provided
+  let finalDateTime = eventDate;
+  if (eventTime) {
+    finalDateTime = `${eventDate}T${eventTime}:00`;
+  }
+
+  const { data, error } = await supabase
+    .from("events")
+    .update({ event_date: finalDateTime })
+    .eq("id", eventId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
