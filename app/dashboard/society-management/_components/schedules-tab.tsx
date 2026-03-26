@@ -9,16 +9,123 @@ type TeamOption = {
   id: string;
   name: string;
   sport: string;
+  status?: string;
 };
 
 export function SchedulesTab(props: {
   teams: TeamOption[];
   scheduleByTeamId: Record<string, TeamScheduleItem[]>;
 }) {
-  const firstTeamId = props.teams[0]?.id ?? "";
+  const activeTeams = props.teams.filter((t) => t.status !== "inactive");
+  const firstTeamId = activeTeams[0]?.id ?? "";
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editDate, setEditDate] = useState("");
   const [editTime, setEditTime] = useState("");
+  const [formError, setFormError] = useState("");
+  const [updateError, setUpdateError] = useState("");
+
+  const formatDateTime = (date: string, time?: string | null) => {
+    const formattedDate = new Date(date).toLocaleDateString("en-US", {
+      month: "2-digit",
+      day: "2-digit",
+      year: "numeric",
+    });
+
+    if (!time) {
+      return formattedDate;
+    }
+
+    return `${formattedDate} ${time.slice(0, 5)}`;
+  };
+
+  const getMinDate = () => {
+    return new Date().toISOString().split("T")[0];
+  };
+
+  const validateScheduleForm = (eventDate: string, name: string, venue: string, sportType: string) => {
+    if (!name || !name.trim()) {
+      setFormError("Event name is required");
+      return false;
+    }
+
+    if (!eventDate) {
+      setFormError("Event date is required");
+      return false;
+    }
+
+    const eventDateObj = new Date(eventDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (eventDateObj < today) {
+      setFormError("Event date cannot be in the past");
+      return false;
+    }
+
+    if (!venue || !venue.trim()) {
+      setFormError("Venue is required");
+      return false;
+    }
+
+    if (!sportType || !sportType.trim()) {
+      setFormError("Sport type is required");
+      return false;
+    }
+
+    setFormError("");
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.currentTarget);
+    const eventDate = formData.get("eventDate") as string;
+    const name = formData.get("name") as string;
+    const venue = formData.get("venue") as string;
+    const sportType = formData.get("sportType") as string;
+
+    if (!validateScheduleForm(eventDate, name, venue, sportType)) {
+      return;
+    }
+
+    try {
+      await createTeamEventAndLinkAction(formData);
+      e.currentTarget.reset();
+      setFormError("");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Failed to create schedule");
+    }
+  };
+
+  const handleUpdateDateTime = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const formData = new FormData(e.currentTarget);
+    const eventDate = formData.get("eventDate") as string;
+
+    setUpdateError("");
+
+    if (!eventDate) {
+      setUpdateError("Event date is required");
+      return;
+    }
+
+    const eventDateObj = new Date(eventDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (eventDateObj < today) {
+      setUpdateError("Event date cannot be in the past");
+      return;
+    }
+
+    try {
+      await updateEventDateTimeAction(formData);
+      setEditingEventId(null);
+      setUpdateError("");
+    } catch (error) {
+      setUpdateError(error instanceof Error ? error.message : "Failed to update schedule");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -29,20 +136,26 @@ export function SchedulesTab(props: {
         </p>
       </div>
 
-      {props.teams.length === 0 ? (
+      {activeTeams.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Create a team first to start scheduling.
+          Create an active team first to start scheduling.
         </p>
       ) : (
         <>
-          <form action={createTeamEventAndLinkAction} className="space-y-3">
+          {formError && (
+            <div className="rounded bg-error/20 px-3 py-2 text-sm text-error">
+              {formError}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <select
                 name="teamId"
                 defaultValue={firstTeamId}
                 className="h-10 rounded-md border border-base-300 bg-base-100 px-3 text-sm"
               >
-                {props.teams.map((team) => (
+                {activeTeams.map((team) => (
                   <option key={team.id} value={team.id}>
                     {team.name}
                   </option>
@@ -60,6 +173,7 @@ export function SchedulesTab(props: {
                 name="eventDate"
                 className="h-10 rounded-md border border-base-300 bg-base-100 px-3 text-sm"
                 required
+                min={getMinDate()}
               />
               <input
                 type="time"
@@ -83,7 +197,7 @@ export function SchedulesTab(props: {
               />
               <button
                 type="submit"
-                className="h-10 rounded-md bg-neutral px-4 text-sm font-semibold text-neutral-content"
+                className="h-10 rounded-md bg-neutral px-4 text-sm font-semibold text-neutral-content hover:bg-neutral/80"
               >
                 Add to schedule
               </button>
@@ -103,7 +217,7 @@ export function SchedulesTab(props: {
                 </tr>
               </thead>
               <tbody>
-                {props.teams.map((team) => {
+                {activeTeams.map((team) => {
                   const items = props.scheduleByTeamId[team.id] ?? [];
 
                   if (items.length === 0) {
@@ -129,10 +243,14 @@ export function SchedulesTab(props: {
                       <td className="px-4 py-2">
                         {editingEventId === item.event?.id ? (
                           <form
-                            action={updateEventDateTimeAction}
+                            onSubmit={handleUpdateDateTime}
                             className="flex gap-2 items-center"
-                            onSubmit={() => setEditingEventId(null)}
                           >
+                            {updateError && (
+                              <div className="absolute rounded bg-error/20 px-2 py-1 text-xs text-error">
+                                {updateError}
+                              </div>
+                            )}
                             <input
                               type="hidden"
                               name="eventId"
@@ -145,6 +263,7 @@ export function SchedulesTab(props: {
                               onChange={(e) => setEditDate(e.target.value)}
                               className="h-8 rounded border border-base-300 px-2 text-sm"
                               required
+                              min={getMinDate()}
                             />
                             <input
                               type="time"
@@ -161,7 +280,10 @@ export function SchedulesTab(props: {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setEditingEventId(null)}
+                              onClick={() => {
+                                setEditingEventId(null);
+                                setUpdateError("");
+                              }}
                               className="h-8 rounded bg-base-300 px-2 text-sm font-medium hover:bg-base-400"
                             >
                               Cancel
@@ -172,18 +294,10 @@ export function SchedulesTab(props: {
                             {item.event?.event_date && (
                               <>
                                 <Calendar className="w-4 h-4" />
-                                {new Date(item.event.event_date).toLocaleDateString()}
-                                {item.event.event_date.includes("T") && (
-                                  <>
-                                    <Clock className="w-4 h-4 ml-2" />
-                                    {new Date(item.event.event_date).toLocaleTimeString(
-                                      "default",
-                                      { hour: "2-digit", minute: "2-digit" }
-                                    )}
-                                  </>
-                                )}
+                                {formatDateTime(item.event.event_date, item.event.event_time)}
                               </>
                             )}
+                            {item.event?.event_time && <Clock className="w-4 h-4" />}
                           </div>
                         )}
                       </td>
@@ -198,9 +312,8 @@ export function SchedulesTab(props: {
                           <button
                             onClick={() => {
                               if (item.event?.event_date) {
-                                const [datePart, timePart] = item.event.event_date.split("T");
-                                setEditDate(datePart ?? "");
-                                setEditTime(timePart ? timePart.slice(0, 5) : "");
+                                setEditDate(item.event.event_date);
+                                setEditTime(item.event.event_time ? item.event.event_time.slice(0, 5) : "");
                                 setEditingEventId(item.event.id);
                               }
                             }}

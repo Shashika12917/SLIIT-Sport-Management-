@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   deleteTeamAction,
   registerTeamAction,
@@ -19,7 +20,54 @@ type Society = {
 };
 
 export function TeamsTab(props: { societies: Society[]; teams: Team[] }) {
-  const teamsForSelectedSociety = props.teams;
+  const [teamName, setTeamName] = useState("");
+  const [teamSport, setTeamSport] = useState("");
+  const [formError, setFormError] = useState("");
+
+  const teamsForSelectedSociety = props.teams.filter((t) => t.status === "active");
+  const inactiveTeams = props.teams.filter((t) => t.status === "inactive");
+
+  const validateTeamForm = () => {
+    setFormError("");
+    
+    if (!teamName.trim()) {
+      setFormError("Team name is required");
+      return false;
+    }
+    
+    if (teamName.trim().length < 2) {
+      setFormError("Team name must be at least 2 characters");
+      return false;
+    }
+    
+    if (!teamSport.trim()) {
+      setFormError("Sport is required");
+      return false;
+    }
+    
+    // Check for duplicate team names
+    if (teamsForSelectedSociety.some((t) => t.name.toLowerCase() === teamName.trim().toLowerCase())) {
+      setFormError(`Team "${teamName}" already exists`);
+      return false;
+    }
+    
+    return true;
+  };
+
+  const handleSubmit = async (formData: FormData) => {
+    if (!validateTeamForm()) {
+      return;
+    }
+    
+    try {
+      await registerTeamAction(formData);
+      setTeamName("");
+      setTeamSport("");
+      setFormError("");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Failed to register team");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -32,40 +80,52 @@ export function TeamsTab(props: { societies: Society[]; teams: Team[] }) {
         </div>
         {props.societies.length > 0 && (
           <form
-            action={registerTeamAction}
-            className="flex items-center gap-2"
+            action={handleSubmit}
+            className="flex flex-col gap-2"
           >
-            <select
-              name="societyId"
-              defaultValue={props.societies[0]?.id ?? ""}
-              className="h-10 rounded-md border border-base-300 bg-base-100 px-3 text-sm"
-            >
-              {props.societies.map((society) => (
-                <option key={society.id} value={society.id}>
-                  {society.name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              name="name"
-              placeholder="Team name"
-              className="h-10 rounded-md border border-base-300 bg-base-100 px-3 text-sm"
-              required
-            />
-            <input
-              type="text"
-              name="sport"
-              placeholder="Sport"
-              className="h-10 rounded-md border border-base-300 bg-base-100 px-3 text-sm"
-              required
-            />
-            <button
-              type="submit"
-              className="h-10 rounded-md bg-neutral px-4 text-sm font-semibold text-neutral-content"
-            >
-              Register Team
-            </button>
+            {formError && (
+              <div className="rounded bg-error/20 px-3 py-2 text-sm text-error">
+                {formError}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <select
+                name="societyId"
+                defaultValue={props.societies[0]?.id ?? ""}
+                className="h-10 rounded-md border border-base-300 bg-base-100 px-3 text-sm"
+              >
+                {props.societies.map((society) => (
+                  <option key={society.id} value={society.id}>
+                    {society.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                name="name"
+                placeholder="Team name"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                className="h-10 rounded-md border border-base-300 bg-base-100 px-3 text-sm"
+                required
+                minLength={2}
+              />
+              <input
+                type="text"
+                name="sport"
+                placeholder="Sport"
+                value={teamSport}
+                onChange={(e) => setTeamSport(e.target.value)}
+                className="h-10 rounded-md border border-base-300 bg-base-100 px-3 text-sm"
+                required
+              />
+              <button
+                type="submit"
+                className="h-10 rounded-md bg-neutral px-4 text-sm font-semibold text-neutral-content hover:bg-neutral/80"
+              >
+                Register Team
+              </button>
+            </div>
           </form>
         )}
       </div>
@@ -87,7 +147,7 @@ export function TeamsTab(props: { societies: Society[]; teams: Team[] }) {
                   colSpan={4}
                   className="px-4 py-6 text-center text-muted-foreground"
                 >
-                  No teams yet. Create the first team using the form above.
+                  No active teams yet. Create the first team using the form above.
                 </td>
               </tr>
             ) : (

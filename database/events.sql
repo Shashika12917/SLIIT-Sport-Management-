@@ -18,6 +18,7 @@ create table public.events (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   event_date date not null,
+  event_time time null,
   venue text not null,
   sport_type text not null,
   status public.event_status not null default 'planned',
@@ -25,8 +26,8 @@ create table public.events (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
 
-  -- Prevent obvious duplicates for the same sport at the same venue on the same date.
-  constraint events_unique_schedule unique (event_date, venue, sport_type)
+  -- Prevent obvious duplicates for the same sport at the same venue on the same date+time.
+  constraint events_unique_schedule unique (event_date, event_time, venue, sport_type)
 );
 
 
@@ -53,7 +54,7 @@ create policy "Authenticated users can view events"
   to authenticated
   using (true);
 
--- Only users with role = 'event_management' in profiles can create/update/cancel.
+-- Users with role = 'event_management' or 'society_management' can create/update/cancel events.
 create policy "Event management role can manage events"
   on public.events
   for all
@@ -63,7 +64,7 @@ create policy "Event management role can manage events"
       select 1
       from public.profiles p
       where p.id = auth.uid()
-        and p.role = 'event_management'
+        and p.role in ('event_management', 'society_management')
     )
   )
   with check (
@@ -71,7 +72,7 @@ create policy "Event management role can manage events"
       select 1
       from public.profiles p
       where p.id = auth.uid()
-        and p.role = 'event_management'
+        and p.role in ('event_management', 'society_management')
     )
     -- Ensure created_by is always the acting user on insert.
     and (created_by = auth.uid())
