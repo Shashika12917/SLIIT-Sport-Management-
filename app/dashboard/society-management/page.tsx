@@ -80,7 +80,7 @@ export default async function SocietyManagementDashboard() {
     console.error("Error fetching teams:", error);
   }
 
-  let scheduleByTeamId: Record<string, TeamScheduleItem[]> = {};
+  const scheduleByTeamId: Record<string, TeamScheduleItem[]> = {};
   try {
     const scheduleEntries: { teamId: string; schedule: TeamScheduleItem[] }[] =
       await Promise.all(

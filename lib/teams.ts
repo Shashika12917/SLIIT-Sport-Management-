@@ -6,6 +6,7 @@ export type TeamScheduleItem = {
     id: string;
     name: string;
     event_date: string;
+    event_time: string | null;
     venue: string;
     sport_type: string;
     status: string;
@@ -207,17 +208,14 @@ export async function linkTeamToEvent(input: {
   eventId: string;
 }) {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("team_event_links")
     .insert({
       team_id: input.teamId,
       event_id: input.eventId,
-    })
-    .select("*")
-    .single();
+    });
 
   if (error) throw error;
-  return data;
 }
 
 export async function unlinkTeamEvent(linkId: string) {
@@ -232,7 +230,7 @@ export async function unlinkTeamEvent(linkId: string) {
 
 export async function getTeamSchedule(teamId: string): Promise<TeamScheduleItem[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("team_event_links")
     .select(
       `
@@ -241,6 +239,7 @@ export async function getTeamSchedule(teamId: string): Promise<TeamScheduleItem[
           id,
           name,
           event_date,
+          event_time,
           venue,
           sport_type,
           status
@@ -248,6 +247,33 @@ export async function getTeamSchedule(teamId: string): Promise<TeamScheduleItem[
       `
     )
     .eq("team_id", teamId);
+
+  if (error) {
+    const detail = `${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`.toLowerCase();
+    const missingEventTimeColumn =
+      error.code === "42703" ||
+      error.code === "PGRST204" ||
+      (detail.includes("event_time") && (detail.includes("column") || detail.includes("schema cache")));
+
+    if (missingEventTimeColumn) {
+      ({ data, error } = await supabase
+        .from("team_event_links")
+        .select(
+          `
+            id,
+            event:events (
+              id,
+              name,
+              event_date,
+              venue,
+              sport_type,
+              status
+            )
+          `
+        )
+        .eq("team_id", teamId) as any);
+    }
+  }
 
   if (error) throw error;
 
@@ -257,6 +283,7 @@ export async function getTeamSchedule(teamId: string): Promise<TeamScheduleItem[
       id: string | number;
       name: string;
       event_date: string;
+      event_time?: string | null;
       venue: string;
       sport_type: string;
       status: string;
@@ -264,6 +291,7 @@ export async function getTeamSchedule(teamId: string): Promise<TeamScheduleItem[
       id: string | number;
       name: string;
       event_date: string;
+      event_time?: string | null;
       venue: string;
       sport_type: string;
       status: string;
@@ -287,6 +315,7 @@ export async function getTeamSchedule(teamId: string): Promise<TeamScheduleItem[
         id: String(rawEvent.id),
         name: String(rawEvent.name),
         event_date: String(rawEvent.event_date),
+        event_time: rawEvent.event_time ? String(rawEvent.event_time) : null,
         venue: String(rawEvent.venue),
         sport_type: String(rawEvent.sport_type),
         status: String(rawEvent.status),
@@ -294,11 +323,14 @@ export async function getTeamSchedule(teamId: string): Promise<TeamScheduleItem[
     };
   });
 
-  // Sort by event date (with null events at the end)
+  // Sort by event date+time (with null events at the end)
   normalized.sort((a, b) => {
     if (!a.event?.event_date) return 1;
     if (!b.event?.event_date) return -1;
-    return new Date(a.event.event_date).getTime() - new Date(b.event.event_date).getTime();
+
+    const aDateTime = `${a.event.event_date}T${a.event.event_time ?? "00:00:00"}`;
+    const bDateTime = `${b.event.event_date}T${b.event.event_time ?? "00:00:00"}`;
+    return new Date(aDateTime).getTime() - new Date(bDateTime).getTime();
   });
 
   return normalized;
@@ -313,14 +345,11 @@ export async function updateEventDateTime(eventId: string, eventDate: string, ev
     finalDateTime = `${eventDate}T${eventTime}:00`;
   }
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("events")
     .update({ event_date: finalDateTime })
-    .eq("id", eventId)
-    .select("*")
-    .single();
+    .eq("id", eventId);
 
   if (error) throw error;
-  return data;
 }
 
